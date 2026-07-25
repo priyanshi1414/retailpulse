@@ -245,6 +245,7 @@ if page == "Model Monitoring":
     )
     st.write("---")
     st.subheader("System Health (Day 26)")
+    LOG_FILE = "events_log.csv"
     st.caption("Lightweight monitoring in place of Prometheus/Grafana — logged locally since we don't have a server for a full metrics stack.")
 
     if os.path.exists(LOG_FILE):
