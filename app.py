@@ -241,7 +241,7 @@ if page == "Model Monitoring":
         "Automated retraining was designed as an Airflow DAG but was not deployed "
         "live due to Windows environment constraints."
     )
-        st.write("---")
+    st.write("---")
     st.subheader("System Health (Day 26)")
     st.caption("Lightweight monitoring in place of Prometheus/Grafana — logged locally since we don't have a server for a full metrics stack.")
 
