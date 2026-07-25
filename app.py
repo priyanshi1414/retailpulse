@@ -241,3 +241,104 @@ if page == "Model Monitoring":
         "Automated retraining was designed as an Airflow DAG but was not deployed "
         "live due to Windows environment constraints."
     )
+        st.write("---")
+    st.subheader("System Health (Day 26)")
+    st.caption("Lightweight monitoring in place of Prometheus/Grafana — logged locally since we don't have a server for a full metrics stack.")
+
+    if os.path.exists(LOG_FILE):
+        logs = pd.read_csv(LOG_FILE)
+        logs["timestamp"] = pd.to_datetime(logs["timestamp"])
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Events Logged", len(logs))
+        col2.metric("Page Views", (logs["event"] == "page_view").sum())
+
+        pred_logs = logs[logs["event"] == "prediction"]
+        if len(pred_logs) > 0:
+            avg_latency = pred_logs["duration_sec"].mean()
+            col3.metric("Avg Forecast Latency", f"{avg_latency:.2f}s")
+
+        st.write("**Page views over time**")
+        views_over_time = logs[logs["event"] == "page_view"].groupby(logs["timestamp"].dt.date).size()
+        st.line_chart(views_over_time)
+
+        st.write("**Recent log entries**")
+        st.dataframe(logs.tail(15))
+    else:
+        st.info("No monitoring data logged yet — interact with the dashboard to generate logs.")
+
+    # ------------------------------------------------------
+    # load testing (day 27)
+    # simulates repeated rapid requests since we don't have
+    # a server to run locust/jmeter against
+    # ------------------------------------------------------
+    st.write("---")
+    st.subheader("Load Test (Day 27)")
+    st.caption("Simulated repeated forecast requests, timed locally in place of Locust/JMeter.")
+
+    if st.button("Run Load Test (20 requests)"):
+        load_times = []
+        progress = st.progress(0)
+        for i in range(20):
+            t0 = time.time()
+            future_lt = prophet_model.make_future_dataframe(periods=30)
+            _ = prophet_model.predict(future_lt)
+            t1 = time.time()
+            load_times.append(t1 - t0)
+            progress.progress((i + 1) / 20)
+
+        load_df = pd.DataFrame({"request": range(1, 21), "latency_sec": load_times})
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Avg Latency", f"{load_df['latency_sec'].mean():.3f}s")
+        col2.metric("Max Latency", f"{load_df['latency_sec'].max():.3f}s")
+        col3.metric("Min Latency", f"{load_df['latency_sec'].min():.3f}s")
+
+        st.line_chart(load_df.set_index("request")["latency_sec"])
+
+        # log the load test as its own event
+        log_event("Model Monitoring", "load_test", duration=round(load_df["latency_sec"].mean(), 3),
+                   extra=f"{len(load_df)} requests")
+
+    # ------------------------------------------------------
+    # final accuracy validation against zidio targets (day 27)
+    # ------------------------------------------------------
+    st.write("---")
+    st.subheader("Final Accuracy Validation (Day 27)")
+    st.caption("Checking model performance against the targets set in the Zidio project brief.")
+
+    hybrid_mape_val = summary[summary["Model"] == "Hybrid"]["Test_MAPE"].values[0]
+    prophet_mape_val = summary[summary["Model"] == "Prophet"]["Test_MAPE"].values[0]
+
+    mape_target = 12.0
+    mape_pass = hybrid_mape_val <= mape_target
+
+    val_col1, val_col2 = st.columns(2)
+    with val_col1:
+        st.metric("Hybrid MAPE (target ≤ 12%)", f"{hybrid_mape_val:.2f}%",
+                   delta=f"{hybrid_mape_val - mape_target:.2f} pts", delta_color="inverse")
+    with val_col2:
+        st.write(" Target met" if mape_pass else " Target not met")
+
+    st.write("")
+
+    # churn model validation
+    features = ["Frequency", "Monetary"]
+    from sklearn.metrics import roc_auc_score
+
+    # NOTE: this assumes rfm has a ground-truth churn label column.
+    # if it doesn't, this section needs an actual labeled holdout set instead.
+    if "Churn" in rfm.columns:
+        churn_probs = churn_model.predict_proba(rfm[features])[:, 1]
+        auc = roc_auc_score(rfm["Churn"], churn_probs)
+        auc_target = 0.88
+        auc_pass = auc >= auc_target
+
+        val_col3, val_col4 = st.columns(2)
+        with val_col3:
+            st.metric("Churn AUC-ROC (target ≥ 0.88)", f"{auc:.3f}",
+                       delta=f"{auc - auc_target:.3f}")
+        with val_col4:
+            st.write(" Target met" if auc_pass else " Target not met")
+    else:
+        st.info("Churn AUC-ROC check needs a ground-truth 'Churn' column in rfm_segments.csv — not present, so skipping this check on the live dashboard. Report this metric from your notebook's train/test split instead.")
