@@ -1,4 +1,4 @@
-Model,Metric,Score
-Prophet,MAPE,8.57
-LSTM,MAPE,5.82
-Hybrid,MAPE,7.17
+Model,Metric,Score,Granularity,Val_MAPE,Test_MAPE
+Prophet,MAPE,8.57,Weekly,20.14,8.57
+LSTM,MAPE,5.82,Weekly,21.09,5.82
+Hybrid,MAPE,7.17,Weekly,19.15,7.17
